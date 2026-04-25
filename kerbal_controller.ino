@@ -138,6 +138,7 @@ void u8g2_prepare(void)
 {
   u8g2.begin();
   u8g2.setFont(u8g2_font_6x10_tf);
+  // u8g2.setFont(u8g2_font_guildenstern_nbp_t_all);
   u8g2.setFontRefHeightExtendedText();
   u8g2.setDrawColor(1);
   u8g2.setFontPosTop();
@@ -272,7 +273,7 @@ void update_altiude(float alt)
 {
   char alt_chars[13];
   char mode[3];
-  strcpy(mode, " S");
+  strcpy(mode, " T");
   format_distance_value(alt, alt_chars);
   
   LED_ALT_0.writeDigitAscii(0, alt_chars[0]);
@@ -334,6 +335,20 @@ void update_periapsis_time(int peri)
   duration_in_seconds_to_dhms_string(peri, buffer);
   sprintf(final_buffer, "%21s", buffer);
   u8g2.drawStr(3, 41, final_buffer);
+}
+
+void update_maneuver(int time_to_next, float delta_v_next, int duration_next)
+{
+  char time_to_mnv_buffer[22];
+  char final_buffer[22];
+  char duration_buffer[11];
+  duration_in_seconds_to_dhms_string(time_to_next, time_to_mnv_buffer);
+  duration_in_seconds_to_dhms_string(duration_next, duration_buffer);
+  sprintf(final_buffer, "MNV|%s|%dΔ|%s", time_to_mnv_buffer, int(delta_v_next), duration_buffer);
+  u8g2.drawStr(0, 53, final_buffer);
+  CHAR_LCD.setCursor(0,0);
+  CHAR_LCD.print(final_buffer);
+  CHAR_LCD.display();
 }
 
 
@@ -638,6 +653,7 @@ void Handle_Simpit_Message(byte messageType, byte message[], byte msgSize)
       {
         maneuverMessage myManeuver;
         myManeuver = parseMessage<maneuverMessage>(message);
+        update_maneuver(myManeuver.timeToNextManeuver, myManeuver.deltaVNextManeuver, myManeuver.durationNextManeuver);
       }
       break;
     case TEMP_LIMIT_MESSAGE:
