@@ -7,6 +7,9 @@
 #include <LiquidCrystal_I2C.h>
 #include <U8g2lib.h>
 #include <Wire.h>
+#include <Adafruit_GFX.h>
+#include "Adafruit_LEDBackpack.h"
+
 
 
 //-----------------//
@@ -50,6 +53,25 @@ const int STATUS_LED_NODE_EXEC = 13;
 const char CLEAR_LINE[] = "                    ";
 
 
+// -- LED Numeric Displays
+#define LED_ALT_0_I2C_ADDRESS 0x74
+#define LED_ALT_1_I2C_ADDRESS 0x70
+#define LED_ALT_2_I2C_ADDRESS 0x73
+#define LED_SPD_0_I2C_ADDRESS 0x75
+#define LED_SPD_1_I2C_ADDRESS 0x71
+#define LED_SPD_2_I2C_ADDRESS 0x72
+
+// -- Lockout Switch
+#define LOCKOUT_SWITCH_PIN 0
+
+// -- Buttons
+#define BUTTON_STAGE_PIN 1
+
+
+
+
+
+
 
 //---------------//
 // -- Globals -- //
@@ -76,6 +98,15 @@ Adafruit_NeoPixel GAUGE_LED_ARRAY(GAUGE_LED_ARRAY_COUNT, GAUGE_LED_ARRAY_DATA_PI
 // -- Char LCD
 LiquidCrystal_I2C CHAR_LCD(0x3f, 20, 4);
 
+// -- LED Numeric Displays
+Adafruit_AlphaNum4 LED_ALT_0 = Adafruit_AlphaNum4();
+Adafruit_AlphaNum4 LED_ALT_1 = Adafruit_AlphaNum4();
+Adafruit_AlphaNum4 LED_ALT_2 = Adafruit_AlphaNum4();
+Adafruit_AlphaNum4 LED_SPD_0 = Adafruit_AlphaNum4();
+Adafruit_AlphaNum4 LED_SPD_1 = Adafruit_AlphaNum4();
+Adafruit_AlphaNum4 LED_SPD_2 = Adafruit_AlphaNum4();
+
+
 
 //-------------------------//
 // -- Runtime Constants -- //
@@ -93,6 +124,11 @@ LiquidCrystal_I2C CHAR_LCD(0x3f, 20, 4);
 #define WHITE_W STATUS_LED_ARRAY.Color(255, 0, 0, 0)
 #define BLACK_W STATUS_LED_ARRAY.Color(0, 0, 0, 0)
 
+//-----------------------//
+// -- Runtime Globals -- //
+//-----------------------//
+Adafruit_AlphaNum4 ALTITUDE_LED_DISPLAYS[] = { LED_ALT_0, LED_ALT_1, LED_ALT_2 };
+Adafruit_AlphaNum4 SPEED_LED_DISPLAYS[] = { LED_SPD_0, LED_SPD_1, LED_SPD_2 };
 
 
 //-----------------//
@@ -136,83 +172,174 @@ void char_lcd_clear_line(int line)
   CHAR_LCD.setCursor(0,line);
 }
 
-// void u8g2_box_title(String  apo, String peri)
-// {
-//   u8g2.drawStr(3, 1, "Appoapsis: 123456  M");
-//   u8g2.drawFrame(0, 12, u8g2.getDisplayWidth(), 1);
-//   u8g2.drawStr(3, 15, "Periapsis: 123456  M");
-//   u8g2.drawFrame(0, 26, u8g2.getDisplayWidth(), 1);
-// }
 
-// int flatten_float_to_six_digits(float num){
-//   if (num > 999999 && num < 999999999){
+void led_segment_prepare()
+{
+  // test pattern for LED segments
+  char test[] = "TEST";
 
-//   }
-// }
+  // -- Altitude Displays
+  LED_ALT_0.begin(LED_ALT_0_I2C_ADDRESS);
+  LED_ALT_0.setBrightness(8);
+  LED_ALT_0.clear();
+  LED_ALT_0.writeDisplay();
+  LED_ALT_1.begin(LED_ALT_1_I2C_ADDRESS);
+  LED_ALT_1.setBrightness(8);
+  LED_ALT_1.clear();
+  LED_ALT_1.writeDisplay();
+  LED_ALT_2.begin(LED_ALT_2_I2C_ADDRESS);
+  LED_ALT_2.setBrightness(8);
+  LED_ALT_2.clear();
+  LED_ALT_2.writeDisplay();
+
+  // -- Speed Displays
+  LED_SPD_0.begin(LED_SPD_0_I2C_ADDRESS);
+  LED_SPD_0.setBrightness(1);
+  LED_SPD_0.clear();
+  LED_SPD_0.writeDisplay();
+  LED_SPD_1.begin(LED_SPD_1_I2C_ADDRESS);
+  LED_SPD_1.setBrightness(1);
+  LED_SPD_1.clear();
+  LED_SPD_1.writeDisplay();
+  LED_SPD_2.begin(LED_SPD_2_I2C_ADDRESS);
+  LED_SPD_2.setBrightness(1);
+  LED_SPD_2.clear();
+  LED_SPD_2.writeDisplay();
+
+  // -- write test pattern
+  for(int i = 0; i < 4; i++)
+  {
+  	    LED_ALT_0.writeDigitAscii(i, test[i]);
+        LED_ALT_1.writeDigitAscii(i, test[i]);
+        LED_ALT_2.writeDigitAscii(i, test[i]);
+        LED_SPD_0.writeDigitAscii(i, test[i]);
+        LED_SPD_1.writeDigitAscii(i, test[i]);
+        LED_SPD_2.writeDigitAscii(i, test[i]);
+  } 
+
+  // -- Display test pattern
+  LED_ALT_0.writeDisplay();
+  LED_ALT_1.writeDisplay();
+  LED_ALT_2.writeDisplay();
+  LED_SPD_0.writeDisplay();
+  LED_SPD_1.writeDisplay();
+  LED_SPD_2.writeDisplay();
+}
+
+
+void update_led_segment_display(Adafruit_AlphaNum4 display, char* value)
+{
+  for (int i=0; i<4; i++)
+  {
+    display.writeDigitAscii(i, value[i]);
+  }
+  display.writeDisplay();
+  CHAR_LCD.setCursor(0,3);
+  CHAR_LCD.print(value);
+  CHAR_LCD.display();
+}
+
+
+char* format_distance_value(float distance, char* buffer)
+{
+  char distance_chars[11];
+  char unit[3];
+  char mode[3];
+  strcpy(unit, " M");
+  
+  if (abs(distance) > 999999999)
+  {
+    distance = distance / 1000 / 1000;
+    strcpy(unit, "MM");
+  }
+  else if (abs(distance) > 999999)
+  {
+    distance = distance / 1000;
+    strcpy(unit, "Km");
+  }
+  
+  sprintf(distance_chars, " %6d %s", int(distance), unit);
+  // if (distance < 0.0)
+  // {
+  //   distance_chars[0] = '-';
+  // }
+  strcpy(buffer, distance_chars);
+  return buffer;
+}
+
+
+void update_altiude(float alt)
+{
+  char alt_chars[13];
+  char mode[3];
+  strcpy(mode, " S");
+  format_distance_value(alt, alt_chars);
+  
+  LED_ALT_0.writeDigitAscii(0, alt_chars[0]);
+  LED_ALT_0.writeDigitAscii(1, alt_chars[1]);
+  LED_ALT_0.writeDigitAscii(2, alt_chars[2]);
+  LED_ALT_0.writeDigitAscii(3, alt_chars[3]);
+  LED_ALT_1.writeDigitAscii(0, alt_chars[4]);
+  LED_ALT_1.writeDigitAscii(1, alt_chars[5]);
+  LED_ALT_1.writeDigitAscii(2, alt_chars[6]);
+  LED_ALT_1.writeDigitAscii(3, alt_chars[7]);
+  LED_ALT_2.writeDigitAscii(0, alt_chars[8]);
+  LED_ALT_2.writeDigitAscii(1, alt_chars[9]);
+  LED_ALT_2.writeDigitAscii(2, mode[0]);
+  LED_ALT_2.writeDigitAscii(3, mode[1]);
+}
 
 
 void update_apoapsis(float apo)
 {
-
   char label[] = "Appoapsis:";
-  char unit[] = "  M";
-  char apo_val[6];
-  dtostrf(apo, 6, 0, apo_val);
-  char buffer[strlen(label) + strlen(apo_val) + strlen(unit) + 1];
-  if (apo < 0)
-  {
-    sprintf(buffer, "%s%s%s", label, apo_val, unit);
-  }
-  else
-  {
-    sprintf(buffer, "%s %s%s", label, apo_val, unit);
-  }
-  u8g2.drawStr(3, 1, buffer);
-  u8g2.drawFrame(0, 12, u8g2.getDisplayWidth(), 1);
+  char apo_val[11];
+  char buffer[strlen(label) + strlen(apo_val) + 2];
+  format_distance_value(apo, apo_val);
+  sprintf(buffer, "%s %s", label, apo_val);
 
-  // char_lcd_clear_line(3);
-  CHAR_LCD.setCursor(0,0);
-  CHAR_LCD.print(buffer);
+  u8g2.drawStr(3, 1, buffer);
+  u8g2.drawFrame(0, 0, u8g2.getDisplayWidth(), 1);
+  u8g2.drawFrame(0, 22, u8g2.getDisplayWidth(), 1);
 }
 
 
 void update_apoapsis_time(int apo)
 {
+  char buffer[22];
+  char final_buffer[22];
+  duration_in_seconds_to_dhms_string(apo, buffer);
+  sprintf(final_buffer, "%21s", buffer);
+  u8g2.drawStr(3, 13, final_buffer);
 }
 
 
 void update_periapsis(float peri)
 {
   char label[] = "Periapsis:";
-  char unit[] = "  M";
-  char peri_val[6];
-  dtostrf(peri, 6, 0, peri_val);
-  char buffer[strlen(label) + strlen(peri_val) + strlen(unit) + 1];
-  if (peri < 0)
-  {
-    sprintf(buffer, "%s%s%s", label, peri_val, unit);
-  }
-  else
-  {
-    sprintf(buffer, "%s %s%s", label, peri_val, unit);
-  }
-  u8g2.drawStr(3, 15, buffer);
-  u8g2.drawFrame(0, 26, u8g2.getDisplayWidth(), 1);
-  
-  // char_lcd_clear_line(3);
-  CHAR_LCD.setCursor(0,2);
-  CHAR_LCD.print(buffer);
+  char peri_val[11];
+  char buffer[strlen(label) + strlen(peri_val) + 2];
+  format_distance_value(peri, peri_val);
+  sprintf(buffer, "%s %s", label, peri_val);
+
+  u8g2.drawStr(3, 28, buffer);
+  u8g2.drawFrame(0, 51, u8g2.getDisplayWidth(), 1);
 }
 
 
 void update_periapsis_time(int peri)
 {
+  char buffer[22];
+  char final_buffer[22];
+  duration_in_seconds_to_dhms_string(peri, buffer);
+  sprintf(final_buffer, "%21s", buffer);
+  u8g2.drawStr(3, 41, final_buffer);
 }
 
 
 void update_led_gauge(float total, float available, const int indices[], uint32_t on_color, uint32_t off_color, uint32_t empty_color, int low_status_led_idx, uint32_t low_status_color)
 {
-  float resource_amount_percent = available / total;
+  float resource_amount_percent = available / total * 100;
   int resource_amount_led_count = map(available, 0, total, 0, 16);
   int gauge_start_idx = indices[0];
 
@@ -355,13 +482,12 @@ void check_master_caution()
   }
 }
 
-char* duration_in_seconds_to_dhms_string(float duration)
+char* duration_in_seconds_to_dhms_string(int duration, char* buffer)
 {
   int days;
   int hours = duration / 3600;
-  int minutes = int(duration / 60) % 60;
-  int seconds = int(duration) % 60;
-  char buffer[20];
+  int minutes = (duration / 60) % 60;
+  int seconds = duration % 60;
 
   if (hours >= 24)
   {
@@ -399,8 +525,9 @@ void Handle_Simpit_Message(byte messageType, byte message[], byte msgSize)
       {
         altitudeMessage myAltitude;
         myAltitude = parseMessage<altitudeMessage>(message);
-        break;
+        update_altiude(myAltitude.surface);
       }
+      break;
     case APSIDESTIME_MESSAGE:
       if (msgSize == sizeof(apsidesTimeMessage))
       {
@@ -408,7 +535,6 @@ void Handle_Simpit_Message(byte messageType, byte message[], byte msgSize)
         myApsidesTime = parseMessage<apsidesTimeMessage>(message);
         update_apoapsis_time(myApsidesTime.apoapsis);
         update_periapsis_time(myApsidesTime.periapsis);
-        break;
       }
       break;
     case APSIDES_MESSAGE:
@@ -557,11 +683,20 @@ void setup(void)
   GAUGE_LED_ARRAY.show();
   STATUS_LED_ARRAY.show();
 
+  // -- Lockout Switch Setup
+  pinMode(LOCKOUT_SWITCH_PIN, INPUT_PULLUP);
+
+  // -- Button Setup
+  pinMode(BUTTON_STAGE_PIN, INPUT_PULLUP);
+
   // -- OLED setup
   u8g2_prepare();
 
   // -- Char LCD setup
   char_lcd_prepare();
+
+  // -- LED Segment setup
+  led_segment_prepare();
 
   // -- Simpit setup
   Serial.begin(115200);
@@ -598,6 +733,7 @@ void setup(void)
     }
   }
   mySimpit.printToKSP("Connected to CKN Industries Controller", PRINT_TO_SCREEN);
+  mySimpit.registerChannel(ALTITUDE_MESSAGE);
   mySimpit.registerChannel(APSIDES_MESSAGE);
   mySimpit.registerChannel(LF_MESSAGE);
   mySimpit.registerChannel(OX_MESSAGE);
@@ -630,6 +766,12 @@ void loop(void)
   u8g2.sendBuffer();
   GAUGE_LED_ARRAY.show();
   STATUS_LED_ARRAY.show();
+  LED_ALT_0.writeDisplay();
+  LED_ALT_1.writeDisplay();
+  LED_ALT_2.writeDisplay();
+  LED_SPD_0.writeDisplay();
+  LED_SPD_1.writeDisplay();
+  LED_SPD_2.writeDisplay();
 
   //-- Sleep before next update
   delay(150);
