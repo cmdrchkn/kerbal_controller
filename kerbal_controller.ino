@@ -1,15 +1,15 @@
 //---------------//
 // -- Imports -- //
 //---------------//
+#include "Adafruit_LEDBackpack.h"
+#include <Adafruit_GFX.h>
 #include <Adafruit_NeoPixel.h>
 #include <Arduino.h>
+#include <EasyButton.h>
 #include <KerbalSimpit.h>
 #include <LiquidCrystal_I2C.h>
 #include <U8g2lib.h>
 #include <Wire.h>
-#include <Adafruit_GFX.h>
-#include "Adafruit_LEDBackpack.h"
-
 
 
 //-----------------//
@@ -66,6 +66,7 @@ const char CLEAR_LINE[] = "                    ";
 
 // -- Buttons
 #define BUTTON_STAGE_PIN 1
+#define SWITCH_RED_PIN 13
 
 
 
@@ -106,6 +107,9 @@ Adafruit_AlphaNum4 LED_SPD_0 = Adafruit_AlphaNum4();
 Adafruit_AlphaNum4 LED_SPD_1 = Adafruit_AlphaNum4();
 Adafruit_AlphaNum4 LED_SPD_2 = Adafruit_AlphaNum4();
 
+// -- Buttons
+EasyButton BUTTON_STAGE(BUTTON_STAGE_PIN);
+EasyButton SWITCH_RED(SWITCH_RED_PIN);
 
 
 //-------------------------//
@@ -124,6 +128,8 @@ Adafruit_AlphaNum4 LED_SPD_2 = Adafruit_AlphaNum4();
 #define WHITE_W STATUS_LED_ARRAY.Color(255, 0, 0, 0)
 #define BLACK_W STATUS_LED_ARRAY.Color(0, 0, 0, 0)
 
+
+
 //-----------------------//
 // -- Runtime Globals -- //
 //-----------------------//
@@ -134,6 +140,7 @@ Adafruit_AlphaNum4 SPEED_LED_DISPLAYS[] = { LED_SPD_0, LED_SPD_1, LED_SPD_2 };
 //-----------------//
 // -- Functions -- //
 //-----------------//
+// -- Prepare
 void u8g2_prepare(void)
 {
   u8g2.begin();
@@ -163,14 +170,6 @@ void char_lcd_prepare()
   CHAR_LCD.setCursor(0,2);
   CHAR_LCD.print("     Connection");
   CHAR_LCD.setCursor(0,3);
-}
-
-
-void char_lcd_clear_line(int line)
-{
-  CHAR_LCD.setCursor(0,line);
-  CHAR_LCD.print(CLEAR_LINE);
-  CHAR_LCD.setCursor(0,line);
 }
 
 
@@ -228,6 +227,25 @@ void led_segment_prepare()
 }
 
 
+void prepare_buttons()
+{
+  BUTTON_STAGE.begin();
+  BUTTON_STAGE.onPressed(button_stage_pressed);
+  
+  SWITCH_RED.begin();
+  SWITCH_RED.onPressed(button_red_pressed);
+}
+
+
+// -- Helpers
+void char_lcd_clear_line(int line)
+{
+  CHAR_LCD.setCursor(0,line);
+  CHAR_LCD.print(CLEAR_LINE);
+  CHAR_LCD.setCursor(0,line);
+}
+
+
 void update_led_segment_display(Adafruit_AlphaNum4 display, char* value)
 {
   for (int i=0; i<4; i++)
@@ -268,6 +286,39 @@ char* format_distance_value(float distance, char* buffer)
   return buffer;
 }
 
+char* duration_in_seconds_to_dhms_string(int duration, char* buffer)
+{
+  int days;
+  int hours = duration / 3600;
+  int minutes = (duration / 60) % 60;
+  int seconds = duration % 60;
+
+  if (hours >= 24)
+  {
+    days = hours / 24;
+    hours = hours - 24;
+    sprintf(buffer, "%dd %dh %dm %ds", days, hours, minutes, seconds);
+  }
+  else if (hours > 0)
+  {
+    sprintf(buffer, "%dh %dm %ds", hours, minutes, seconds);
+  }
+  else if (minutes > 0)
+  {
+    sprintf(buffer, "%dm %ds", minutes, seconds);
+  }
+  else if (seconds > 0)
+  {
+    sprintf(buffer, "%ds", seconds);
+  }
+  else  // something broke, fall back to raw duration
+  {
+    sprintf(buffer, "%fs", duration);
+  }
+
+  return buffer;
+}
+
 
 void update_altiude(float alt)
 {
@@ -291,6 +342,57 @@ void update_altiude(float alt)
 }
 
 
+void update_velocity(float vel)
+{
+  char vel_chars[13];
+  char mode[3];
+  char unit[3];
+  strcpy(mode, " O");
+  strcpy(unit, "Ms");
+  sprintf(vel_chars, " %6d %s%s", int(vel), unit, mode);
+  
+  LED_SPD_0.writeDigitAscii(0, vel_chars[0]);
+  LED_SPD_0.writeDigitAscii(1, vel_chars[1]);
+  LED_SPD_0.writeDigitAscii(2, vel_chars[2]);
+  LED_SPD_0.writeDigitAscii(3, vel_chars[3]);
+  LED_SPD_1.writeDigitAscii(0, vel_chars[4]);
+  LED_SPD_1.writeDigitAscii(1, vel_chars[5]);
+  LED_SPD_1.writeDigitAscii(2, vel_chars[6]);
+  LED_SPD_1.writeDigitAscii(3, vel_chars[7]);
+  LED_SPD_2.writeDigitAscii(0, vel_chars[8], true);
+  LED_SPD_2.writeDigitAscii(1, vel_chars[9]);
+  LED_SPD_2.writeDigitAscii(2, vel_chars[10]);
+  LED_SPD_2.writeDigitAscii(3, vel_chars[11]);
+}
+
+
+void update_status_led(const int index, uint32_t color)
+{
+  STATUS_LED_ARRAY.setPixelColor(index, color);
+  STATUS_LED_STATE[index] = color;
+}
+
+
+// -- Handle Button Presses
+void check_button_releases()
+{
+}
+void button_stage_pressed()
+{
+
+}
+
+
+void button_red_pressed()
+{
+}
+
+
+void button_red_released()
+{
+}
+
+// -- Handle Simpit Messages
 void update_apoapsis(float apo)
 {
   char label[] = "Appoapsis:";
@@ -344,11 +446,15 @@ void update_maneuver(int time_to_next, float delta_v_next, int duration_next)
   char duration_buffer[11];
   duration_in_seconds_to_dhms_string(time_to_next, time_to_mnv_buffer);
   duration_in_seconds_to_dhms_string(duration_next, duration_buffer);
-  sprintf(final_buffer, "MNV|%s|%dΔ|%s", time_to_mnv_buffer, int(delta_v_next), duration_buffer);
+  if (delta_v_next > 0.0)
+  {
+    sprintf(final_buffer, "MNV|%s|%dΔ|%s", time_to_mnv_buffer, int(delta_v_next), duration_buffer);
+  }
+  else
+  {
+    sprintf(final_buffer, "No Maneuver Planned");
+  }
   u8g2.drawStr(0, 53, final_buffer);
-  CHAR_LCD.setCursor(0,0);
-  CHAR_LCD.print(final_buffer);
-  CHAR_LCD.display();
 }
 
 
@@ -384,13 +490,6 @@ void update_led_gauge(float total, float available, const int indices[], uint32_
   {
     update_status_led(low_status_led_idx, BLACK_W);
   }
-}
-
-
-void update_status_led(const int index, uint32_t color)
-{
-  STATUS_LED_ARRAY.setPixelColor(index, color);
-  STATUS_LED_STATE[index] = color;
 }
 
 
@@ -479,6 +578,7 @@ void update_status_sub_orbit(int vessel_situation)
   }
 }
 
+
 void check_master_caution()
 {
   update_status_led(STATUS_LED_MASTER_CAUTION_A, BLACK_W);
@@ -497,40 +597,8 @@ void check_master_caution()
   }
 }
 
-char* duration_in_seconds_to_dhms_string(int duration, char* buffer)
-{
-  int days;
-  int hours = duration / 3600;
-  int minutes = (duration / 60) % 60;
-  int seconds = duration % 60;
 
-  if (hours >= 24)
-  {
-    days = hours / 24;
-    hours = hours - 24;
-    sprintf(buffer, "%dd %dh %dm %ds", days, hours, minutes, seconds);
-  }
-  else if (hours > 0)
-  {
-    sprintf(buffer, "%dh %dm %ds", hours, minutes, seconds);
-  }
-  else if (minutes > 0)
-  {
-    sprintf(buffer, "%dm %ds", minutes, seconds);
-  }
-  else if (seconds > 0)
-  {
-    sprintf(buffer, "%ds", seconds);
-  }
-  else  // something broke, fall back to raw duration
-  {
-    sprintf(buffer, "%fs", duration);
-  }
-
-  return buffer;
-}
-
-
+// -- Main Simpit Message Handler
 void Handle_Simpit_Message(byte messageType, byte message[], byte msgSize)
 {
   switch (messageType)
@@ -541,6 +609,14 @@ void Handle_Simpit_Message(byte messageType, byte message[], byte msgSize)
         altitudeMessage myAltitude;
         myAltitude = parseMessage<altitudeMessage>(message);
         update_altiude(myAltitude.surface);
+      }
+      break;
+    case VELOCITY_MESSAGE:
+      if (msgSize == sizeof(velocityMessage))
+      {
+        velocityMessage myVelocity;
+        myVelocity = parseMessage<velocityMessage>(message);
+        update_velocity(myVelocity.orbital);
       }
       break;
     case APSIDESTIME_MESSAGE:
@@ -668,6 +744,8 @@ void Handle_Simpit_Message(byte messageType, byte message[], byte msgSize)
 }
 
 
+
+// -- Tests
 void test_led_guage()
 {
   update_led_gauge(1, 1, GAUGE_LED_FUEL_INDICES, YELLOW, BLACK, RED, STATUS_LED_LOW_FUEL, YELLOW);
@@ -703,7 +781,7 @@ void setup(void)
   pinMode(LOCKOUT_SWITCH_PIN, INPUT_PULLUP);
 
   // -- Button Setup
-  pinMode(BUTTON_STAGE_PIN, INPUT_PULLUP);
+  prepare_buttons();
 
   // -- OLED setup
   u8g2_prepare();
@@ -750,6 +828,7 @@ void setup(void)
   }
   mySimpit.printToKSP("Connected to CKN Industries Controller", PRINT_TO_SCREEN);
   mySimpit.registerChannel(ALTITUDE_MESSAGE);
+  mySimpit.registerChannel(VELOCITY_MESSAGE);
   mySimpit.registerChannel(APSIDES_MESSAGE);
   mySimpit.registerChannel(LF_MESSAGE);
   mySimpit.registerChannel(OX_MESSAGE);
