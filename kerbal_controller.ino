@@ -1,11 +1,11 @@
 //---------------//
 // -- Imports -- //
 //---------------//
+#include "Adafruit_Debounce.h"
 #include "Adafruit_LEDBackpack.h"
 #include <Adafruit_GFX.h>
 #include <Adafruit_NeoPixel.h>
 #include <Arduino.h>
-#include <EasyButton.h>
 #include <KerbalSimpit.h>
 #include <LiquidCrystal_I2C.h>
 #include <U8g2lib.h>
@@ -15,6 +15,8 @@
 //-----------------//
 // -- Constants -- //
 //-----------------//
+#define LOOP_DELAY_MS 10
+
 // -- LED Gauges
 #define GAUGE_LED_ARRAY_DATA_PIN 14
 #define GAUGE_LED_ARRAY_COUNT 64
@@ -52,6 +54,8 @@ const int STATUS_LED_NODE_EXEC = 13;
 // -- Char LCD
 const char CLEAR_LINE[] = "                    ";
 
+// -- OLED
+#define OLED_RESET_MS 500
 
 // -- LED Numeric Displays
 #define LED_ALT_0_I2C_ADDRESS 0x74
@@ -66,9 +70,12 @@ const char CLEAR_LINE[] = "                    ";
 
 // -- Buttons
 #define BUTTON_STAGE_PIN 1
-#define SWITCH_RED_PIN 13
-
-
+#define SWITCH_ABORT_PIN 26
+#define SWITCH_GEAR_PIN 13
+#define SWITCH_LIGHTS_PIN 14
+#define SWITCH_RCS_PIN 11
+#define SWITCH_SAS_PIN 10 
+#define SWITCH_BRAKES_PIN 12
 
 
 
@@ -79,6 +86,7 @@ const char CLEAR_LINE[] = "                    ";
 //---------------//
 bool MASTER_CAUTION = false;
 int STATUS_LED_STATE[STATUS_LED_ARRAY_COUNT];
+int LOOP_COUNTER = 0;
 
 
 //--------------------//
@@ -107,9 +115,14 @@ Adafruit_AlphaNum4 LED_SPD_0 = Adafruit_AlphaNum4();
 Adafruit_AlphaNum4 LED_SPD_1 = Adafruit_AlphaNum4();
 Adafruit_AlphaNum4 LED_SPD_2 = Adafruit_AlphaNum4();
 
-// -- Buttons
-EasyButton BUTTON_STAGE(BUTTON_STAGE_PIN);
-EasyButton SWITCH_RED(SWITCH_RED_PIN);
+// -- Buttons & Switches
+Adafruit_Debounce SWITCH_GEAR(SWITCH_GEAR_PIN, LOW);
+Adafruit_Debounce SWITCH_LIGHTS(SWITCH_LIGHTS_PIN, LOW);
+Adafruit_Debounce SWITCH_RCS(SWITCH_RCS_PIN, LOW);
+Adafruit_Debounce SWITCH_SAS(SWITCH_SAS_PIN, LOW);
+Adafruit_Debounce SWITCH_BRAKES(SWITCH_BRAKES_PIN, LOW);  
+
+
 
 
 //-------------------------//
@@ -135,6 +148,7 @@ EasyButton SWITCH_RED(SWITCH_RED_PIN);
 //-----------------------//
 Adafruit_AlphaNum4 ALTITUDE_LED_DISPLAYS[] = { LED_ALT_0, LED_ALT_1, LED_ALT_2 };
 Adafruit_AlphaNum4 SPEED_LED_DISPLAYS[] = { LED_SPD_0, LED_SPD_1, LED_SPD_2 };
+
 
 
 //-----------------//
@@ -209,12 +223,12 @@ void led_segment_prepare()
   // -- write test pattern
   for(int i = 0; i < 4; i++)
   {
-  	    LED_ALT_0.writeDigitAscii(i, test[i]);
-        LED_ALT_1.writeDigitAscii(i, test[i]);
-        LED_ALT_2.writeDigitAscii(i, test[i]);
-        LED_SPD_0.writeDigitAscii(i, test[i]);
-        LED_SPD_1.writeDigitAscii(i, test[i]);
-        LED_SPD_2.writeDigitAscii(i, test[i]);
+  LED_ALT_0.writeDigitAscii(i, test[i]);
+  LED_ALT_1.writeDigitAscii(i, test[i]);
+  LED_ALT_2.writeDigitAscii(i, test[i]);
+  LED_SPD_0.writeDigitAscii(i, test[i]);
+  LED_SPD_1.writeDigitAscii(i, test[i]);
+  LED_SPD_2.writeDigitAscii(i, test[i]);
   } 
 
   // -- Display test pattern
@@ -229,11 +243,11 @@ void led_segment_prepare()
 
 void prepare_buttons()
 {
-  BUTTON_STAGE.begin();
-  BUTTON_STAGE.onPressed(button_stage_pressed);
-  
-  SWITCH_RED.begin();
-  SWITCH_RED.onPressed(button_red_pressed);
+  SWITCH_GEAR.begin();
+  SWITCH_LIGHTS.begin();
+  SWITCH_RCS.begin();
+  SWITCH_SAS.begin();
+  SWITCH_BRAKES.begin();
 }
 
 
@@ -372,25 +386,6 @@ void update_status_led(const int index, uint32_t color)
   STATUS_LED_STATE[index] = color;
 }
 
-
-// -- Handle Button Presses
-void check_button_releases()
-{
-}
-void button_stage_pressed()
-{
-
-}
-
-
-void button_red_pressed()
-{
-}
-
-
-void button_red_released()
-{
-}
 
 // -- Handle Simpit Messages
 void update_apoapsis(float apo)
@@ -598,6 +593,60 @@ void check_master_caution()
 }
 
 
+void check_buttons()
+{
+  SWITCH_GEAR.update();
+  if (SWITCH_GEAR.justPressed())
+  {
+    mySimpit.activateAction(GEAR_ACTION);
+  }
+  else if (SWITCH_GEAR.justReleased())
+  {
+    mySimpit.deactivateAction(GEAR_ACTION);
+  }
+
+  SWITCH_LIGHTS.update();
+  if (SWITCH_LIGHTS.justPressed())
+  {
+    mySimpit.activateAction(LIGHT_ACTION);
+  }
+  else if (SWITCH_LIGHTS.justReleased())
+  {
+    mySimpit.deactivateAction(LIGHT_ACTION);
+  }
+
+  SWITCH_RCS.update();
+  if (SWITCH_RCS.justPressed())
+  {
+    mySimpit.activateAction(RCS_ACTION);
+  }
+  else if (SWITCH_RCS.justReleased())
+  {
+    mySimpit.deactivateAction(RCS_ACTION);
+  }
+
+  SWITCH_SAS.update();
+  if (SWITCH_SAS.justPressed())
+  {
+    mySimpit.activateAction(SAS_ACTION);
+  }
+  else if (SWITCH_SAS.justReleased())
+  {
+    mySimpit.deactivateAction(SAS_ACTION);
+  }
+
+  SWITCH_BRAKES.update();
+  if (SWITCH_BRAKES.justPressed())
+  {
+    mySimpit.activateAction(BRAKES_ACTION);
+  }
+  else if (SWITCH_BRAKES.justReleased())
+  {
+    mySimpit.deactivateAction(BRAKES_ACTION);
+  }
+}
+
+
 // -- Main Simpit Message Handler
 void Handle_Simpit_Message(byte messageType, byte message[], byte msgSize)
 {
@@ -771,7 +820,7 @@ void setup(void)
   GAUGE_LED_ARRAY.begin();
   STATUS_LED_ARRAY.begin();
   GAUGE_LED_ARRAY.setBrightness(3);
-  STATUS_LED_ARRAY.setBrightness(10);
+  STATUS_LED_ARRAY.setBrightness(255);
   test_led_guage();
   test_status_led();
   GAUGE_LED_ARRAY.show();
@@ -799,6 +848,7 @@ void setup(void)
   while (!mySimpit.init())
   {
     u8g2.clearBuffer();
+    u8g2.sendF("ca", 0xd5, 0xF0);
     if (connection_attempts % 2 == 0)
     {
       u8g2.drawStr(0, 0, "Waiting for KSP...");
@@ -844,6 +894,7 @@ void setup(void)
   GAUGE_LED_ARRAY.fill(BLACK, 0, GAUGE_LED_ARRAY_COUNT);
   STATUS_LED_ARRAY.fill(BLACK_W, 0, STATUS_LED_ARRAY_COUNT);
   CHAR_LCD.clear();
+  u8g2.clearBuffer();
 }
 
 
@@ -853,9 +904,18 @@ void setup(void)
 //------------//
 void loop(void)
 {
+  LOOP_COUNTER++;
+  
+  // -- Reset OLED frame buffer periodically
+  if (LOOP_COUNTER * LOOP_DELAY_MS / OLED_RESET_MS == 0 || LOOP_COUNTER > 100) {
+    u8g2.clearBuffer();
+    LOOP_COUNTER = 0;
+  }
+
   // -- Fetch updates
   mySimpit.update();
   check_master_caution();
+  check_buttons();
 
   // -- Display updates
   u8g2.sendBuffer();
@@ -867,10 +927,7 @@ void loop(void)
   LED_SPD_0.writeDisplay();
   LED_SPD_1.writeDisplay();
   LED_SPD_2.writeDisplay();
-
+  
   //-- Sleep before next update
-  delay(150);
-
-  // -- Reset OLED frame buffer
-  u8g2.clearBuffer();
+  delay(LOOP_DELAY_MS);
 }
