@@ -10,6 +10,7 @@
 #include <LiquidCrystal_I2C.h>
 #include <U8g2lib.h>
 #include <Wire.h>
+#include "cmdrchkn_transparent_256.h"
 
 //-----------------//
 // -- Constants -- //
@@ -58,7 +59,7 @@ const int STATUS_LED_SAS_ANTINORMAL[] = {0, -1};
 const int STATUS_LED_SAS_RADIAL_IN[] = {14, -1};
 const int STATUS_LED_SAS_RADIAL_OUT[] = {15, -1};
 const int EMPTY_STATUS_LED[] = {-1};
-const int STATUS_LED_MASTER_CAUTION_TRIGGERS[] = {58, 59, 53, 52, 42, 43, 37, 36, 60, 61, 51, 50, 44, 45, 35, 34, 28, 29, 19, 18, 26, 27, 21, 20, 10, 11, 5, 4};
+const int STATUS_LED_MASTER_CAUTION_TRIGGERS[] = {58, 59, 53, 52, 42, 43, 37, 36, 60, 61, 51, 50, 44, 45, 35, 34, 28, 29, 19, 18, 26, 27, 21, 20};
 
 #define SITUATION_LANDED 0
 #define SITUATION_SPLASHED 1
@@ -101,16 +102,18 @@ const char CLEAR_LINE[] = "                    ";
 #define LOCKOUT_SWITCH_PIN 0
 
 // -- Buttons
-#define BUTTON_STAGE_PIN 16
-#define SWITCH_ABORT_PIN 17
-#define SWITCH_GEAR_PIN 18
-#define SWITCH_LIGHTS_PIN 19
-#define SWITCH_RCS_PIN 20
-#define SWITCH_SAS_PIN 21
-#define SWITCH_BRAKES_PIN 22
+#define BUTTON_STAGE_PIN 9
+#define SWITCH_ABORT_PIN 8
+#define SWITCH_GEAR_PIN 6
+#define SWITCH_LIGHTS_PIN 7
+#define SWITCH_RCS_PIN 2
+#define SWITCH_SAS_PIN 1
+#define SWITCH_BRAKES_PIN 3
 #define SWITCH_REPORT_STAGE_AMOUNTS_PIN 11
-#define SWITCH_SCREEN_MODE_UP_PIN 12
-#define SWITCH_SCREEN_MODE_DOWN_PIN 13
+#define SWITCH_SCREEN_MODE_UP_PIN 13
+#define SWITCH_SCREEN_MODE_DOWN_PIN 10
+#define SWITCH_ALT_MODE_PIN 12
+#define SWITCH_SPD_MODE_PIN 14
 
 //---------------//
 // -- Globals -- //
@@ -120,6 +123,10 @@ int STATUS_LED_STATE[STATUS_LED_ARRAY_COUNT];
 int LOOP_COUNTER = 0;
 bool REPORT_STAGE_AMOUNTS = false;
 int CURRENT_SCREEN_MODE = 0; // 0 = orbit, 1 = manuver, 2 = target
+char CURRENT_ALTITUDE_MODE = 'T'; //Terrain or Sea level
+char CURRENT_SPEED_MODE = 'S'; //Surface, Orbit, or Target
+bool OLED_NEEDS_RESET = false;
+bool STAGE_ABORT_LOCKOUT = true;
 
 //--------------------//
 // -- Constructors -- //
@@ -148,6 +155,9 @@ Adafruit_AlphaNum4 LED_SPD_1 = Adafruit_AlphaNum4();
 Adafruit_AlphaNum4 LED_SPD_2 = Adafruit_AlphaNum4();
 
 // -- Buttons & Switches
+Adafruit_Debounce SWITCH_STAGE(BUTTON_STAGE_PIN, LOW);
+Adafruit_Debounce SWITCH_ABORT(SWITCH_ABORT_PIN, LOW);
+Adafruit_Debounce LOCKOUT_SWITCH(LOCKOUT_SWITCH_PIN, LOW);
 Adafruit_Debounce SWITCH_GEAR(SWITCH_GEAR_PIN, LOW);
 Adafruit_Debounce SWITCH_LIGHTS(SWITCH_LIGHTS_PIN, LOW);
 Adafruit_Debounce SWITCH_RCS(SWITCH_RCS_PIN, LOW);
@@ -156,6 +166,8 @@ Adafruit_Debounce SWITCH_BRAKES(SWITCH_BRAKES_PIN, LOW);
 Adafruit_Debounce SWITCH_REPORT_STAGE_AMOUNTS(SWITCH_REPORT_STAGE_AMOUNTS_PIN, LOW);
 Adafruit_Debounce SWITCH_SCREEN_MODE_UP(SWITCH_SCREEN_MODE_UP_PIN, LOW);
 Adafruit_Debounce SWITCH_SCREEN_MODE_DOWN(SWITCH_SCREEN_MODE_DOWN_PIN, LOW);
+Adafruit_Debounce SWITCH_ALT_MODE(SWITCH_ALT_MODE_PIN, LOW);
+Adafruit_Debounce SWITCH_SPD_MODE(SWITCH_SPD_MODE_PIN, LOW);
 
 //-------------------------//
 // -- Runtime Constants -- //
@@ -195,7 +207,7 @@ void u8g2_prepare(void)
   // u8g2.setFlipMode(0);
 
   u8g2.clearBuffer();
-  u8g2.drawStr(0, 0, "Waiting for KSP");
+  draw_oled_logo();
   u8g2.sendBuffer();
 }
 
@@ -216,7 +228,8 @@ void char_lcd_prepare()
 void led_segment_prepare()
 {
   // test pattern for LED segments
-  char test[] = "TEST";
+  char test[] = "WAITING FOR CONNECTION  ";
+  //            |            ^           |
 
   // -- Altitude Displays
   LED_ALT_0.begin(LED_ALT_0_I2C_ADDRESS);
@@ -247,15 +260,40 @@ void led_segment_prepare()
   LED_SPD_2.writeDisplay();
 
   // -- write test pattern
-  for (int i = 0; i < 4; i++)
-  {
-    LED_ALT_0.writeDigitAscii(i, test[i]);
-    LED_ALT_1.writeDigitAscii(i, test[i]);
-    LED_ALT_2.writeDigitAscii(i, test[i]);
-    LED_SPD_0.writeDigitAscii(i, test[i]);
-    LED_SPD_1.writeDigitAscii(i, test[i]);
-    LED_SPD_2.writeDigitAscii(i, test[i]);
-  }
+  write_chars_to_segment_displays(test);
+}
+
+void write_chars_to_segment_displays(char chars[24])
+{
+  LED_ALT_0.writeDigitAscii(0, chars[0]);
+  LED_ALT_0.writeDigitAscii(1, chars[1]);
+  LED_ALT_0.writeDigitAscii(2, chars[2]);
+  LED_ALT_0.writeDigitAscii(3, chars[3]);
+
+  LED_ALT_1.writeDigitAscii(0, chars[4]);
+  LED_ALT_1.writeDigitAscii(1, chars[5]);
+  LED_ALT_1.writeDigitAscii(2, chars[6]);
+  LED_ALT_1.writeDigitAscii(3, chars[7]);
+
+  LED_ALT_2.writeDigitAscii(0, chars[8]);
+  LED_ALT_2.writeDigitAscii(1, chars[9]);
+  LED_ALT_2.writeDigitAscii(2, chars[10]);
+  LED_ALT_2.writeDigitAscii(3, chars[11]);
+
+  LED_SPD_0.writeDigitAscii(0, chars[12]);
+  LED_SPD_0.writeDigitAscii(1, chars[13]);
+  LED_SPD_0.writeDigitAscii(2, chars[14]);
+  LED_SPD_0.writeDigitAscii(3, chars[15]);
+
+  LED_SPD_1.writeDigitAscii(0, chars[16]);
+  LED_SPD_1.writeDigitAscii(1, chars[17]);
+  LED_SPD_1.writeDigitAscii(2, chars[18]);
+  LED_SPD_1.writeDigitAscii(3, chars[19]);
+
+  LED_SPD_2.writeDigitAscii(0, chars[20]);
+  LED_SPD_2.writeDigitAscii(1, chars[21]);
+  LED_SPD_2.writeDigitAscii(2, chars[22]);
+  LED_SPD_2.writeDigitAscii(3, chars[23]);
 
   // -- Display test pattern
   LED_ALT_0.writeDisplay();
@@ -359,7 +397,8 @@ void update_altiude(float alt)
 {
   char alt_chars[13];
   char mode[3];
-  strcpy(mode, " T");
+  // strcpy(mode, " T");
+  sprintf(mode, " %c", CURRENT_ALTITUDE_MODE);
   format_distance_value(alt, alt_chars);
 
   LED_ALT_0.writeDigitAscii(0, alt_chars[0]);
@@ -381,7 +420,8 @@ void update_velocity(float vel)
   char vel_chars[13];
   char mode[3];
   char unit[3];
-  strcpy(mode, " O");
+  // strcpy(mode, " O");
+  sprintf(mode, " %c", CURRENT_SPEED_MODE);
   strcpy(unit, "Ms");
   sprintf(vel_chars, " %6d %s%s", int(vel), unit, mode);
 
@@ -412,6 +452,15 @@ void update_status_led(const int *indexes, uint32_t color)
   }
 }
 
+void check_oled_reset()
+{
+  if (OLED_NEEDS_RESET)
+  {
+    u8g2.clearBuffer();
+    OLED_NEEDS_RESET = false;
+  }
+}
+
 // -- Handle Simpit Messages
 void update_apoapsis(float apo)
 {
@@ -421,6 +470,7 @@ void update_apoapsis(float apo)
   format_distance_value(apo, apo_val);
   sprintf(buffer, "%s %s", label, apo_val);
 
+  check_oled_reset();
   u8g2.setDrawColor(0);
   u8g2.drawBox(3, 0, u8g2.getDisplayWidth(), 9);
   u8g2.setDrawColor(1);
@@ -435,6 +485,8 @@ void update_apoapsis_time(int apo)
   char final_buffer[22];
   duration_in_seconds_to_dhms_string(apo, buffer);
   sprintf(final_buffer, "%21s", buffer);
+
+  check_oled_reset();
   u8g2.setDrawColor(0);
   u8g2.drawBox(0, 11, u8g2.getDisplayWidth(), 9);
   u8g2.setDrawColor(1);
@@ -447,8 +499,16 @@ void update_periapsis(float peri)
   char peri_val[11];
   char buffer[strlen(label) + strlen(peri_val) + 2];
   format_distance_value(peri, peri_val);
-  sprintf(buffer, "%s %s", label, peri_val);
-
+  if (peri < 0.0) //solve an off-by-one on the display
+  {
+    sprintf(buffer, "%s%s", label, peri_val);
+  }
+  else
+  {
+    sprintf(buffer, "%s %s", label, peri_val);
+  }
+  
+  check_oled_reset();
   u8g2.setDrawColor(0);
   u8g2.drawBox(0, 22, u8g2.getDisplayWidth(), 9);
   u8g2.setDrawColor(1);
@@ -463,6 +523,7 @@ void update_periapsis_time(int peri)
   duration_in_seconds_to_dhms_string(peri, buffer);
   sprintf(final_buffer, "%21s", buffer);
 
+  check_oled_reset();
   u8g2.setDrawColor(0);
   u8g2.drawBox(0, 31, u8g2.getDisplayWidth(), 9);
   u8g2.setDrawColor(1);
@@ -484,6 +545,8 @@ void update_maneuver(int time_to_next, float delta_v_next, int duration_next)
   {
     sprintf(final_buffer, "No Maneuver Planned");
   }
+
+  check_oled_reset();
   u8g2.setDrawColor(0);
   u8g2.drawBox(0, 53, u8g2.getDisplayWidth(), 9);
   u8g2.setDrawColor(1);
@@ -624,6 +687,28 @@ void check_master_caution()
 
 void check_buttons()
 {
+  LOCKOUT_SWITCH.update();
+  if (LOCKOUT_SWITCH.justReleased())
+  {    STAGE_ABORT_LOCKOUT = false;
+    mySimpit.printToKSP("Stage/Abort Lockout OFF", PRINT_TO_SCREEN);
+  }
+  else if (LOCKOUT_SWITCH.justPressed())
+  {    STAGE_ABORT_LOCKOUT = true;
+    mySimpit.printToKSP("Stage/Abort Lockout ON", PRINT_TO_SCREEN);
+  }
+
+  SWITCH_STAGE.update();
+  if (SWITCH_STAGE.justReleased() && !STAGE_ABORT_LOCKOUT)
+  {
+    mySimpit.activateAction(STAGE_ACTION);
+  }
+
+  SWITCH_ABORT.update();
+  if (SWITCH_ABORT.justReleased() && !STAGE_ABORT_LOCKOUT)
+  {
+    mySimpit.activateAction(ABORT_ACTION);
+  }
+
   SWITCH_GEAR.update();
   if (SWITCH_GEAR.justPressed())
   {
@@ -701,6 +786,26 @@ void check_buttons()
   {
     CURRENT_SCREEN_MODE = (CURRENT_SCREEN_MODE - 1 + 3) % 3;
   }
+
+  SWITCH_ALT_MODE.update();
+  if (SWITCH_ALT_MODE.justPressed())
+  {
+    CURRENT_ALTITUDE_MODE = 'S';
+  }
+  else if (SWITCH_ALT_MODE.justReleased())
+  {
+    CURRENT_ALTITUDE_MODE = 'T';
+  }
+
+  SWITCH_SPD_MODE.update();
+  if (SWITCH_SPD_MODE.justPressed())
+  {
+    CURRENT_SPEED_MODE = 'S';
+  }
+  else if (SWITCH_SPD_MODE.justReleased())
+  {
+    CURRENT_SPEED_MODE = 'O';
+  }
 }
 
 void zero_led_gauges()
@@ -717,7 +822,7 @@ void request_resource_refresh()
 {
   mySimpit.requestMessageOnChannel(ELECTRIC_MESSAGE);
   mySimpit.requestMessageOnChannel(MONO_MESSAGE);
-  
+
   if (REPORT_STAGE_AMOUNTS)
   {
     mySimpit.requestMessageOnChannel(LF_STAGE_MESSAGE);
@@ -740,40 +845,40 @@ void update_sas_mode_status_led(int sas_mode)
   reset_sas_indicators();
   switch (sas_mode)
   {
-    case SAS_MODE_OFF:
-      break;
-    case SAS_MODE_ANTINORMAL:
-      update_status_led(STATUS_LED_SAS_ANTINORMAL, CYAN);
-      break;
-    case SAS_MODE_NORMAL:
-      update_status_led(STATUS_LED_SAS_NORMAL, CYAN);
-      break;
-    case SAS_MODE_PROGRADE:
-      update_status_led(STATUS_LED_SAS_PROGRADE, GREEN);
-      break;
-    case SAS_MODE_RETROGRADE:
-      update_status_led(STATUS_LED_SAS_RETROGRADE, GREEN);
-      break;
-    case SAS_MODE_RADIALIN:
-      update_status_led(STATUS_LED_SAS_RADIAL_IN, PURPLE);
-      break;
-    case SAS_MODE_RADIALOUT:
-      update_status_led(STATUS_LED_SAS_RADIAL_OUT, PURPLE);
-      break;
-    case SAS_MODE_TARGET:
-      update_status_led(STATUS_LED_SAS_TARGET, PURPLE);
-      break;
-    case SAS_MODE_ANTITARGET:
-      update_status_led(STATUS_LED_SAS_ANTITARGET, PURPLE);
-      break;
-    case SAS_MODE_MANEUVER:
-      update_status_led(STATUS_LED_SAS_MANUVER, BLUE);
-      break;
-    case SAS_MODE_STABILITYASSIST:
-      update_status_led(STATUS_LED_SAS_STABLIZE, WHITE);
-      break;
-    default:
-      break;
+  case SAS_MODE_OFF:
+    break;
+  case SAS_MODE_ANTINORMAL:
+    update_status_led(STATUS_LED_SAS_ANTINORMAL, CYAN);
+    break;
+  case SAS_MODE_NORMAL:
+    update_status_led(STATUS_LED_SAS_NORMAL, CYAN);
+    break;
+  case SAS_MODE_PROGRADE:
+    update_status_led(STATUS_LED_SAS_PROGRADE, GREEN);
+    break;
+  case SAS_MODE_RETROGRADE:
+    update_status_led(STATUS_LED_SAS_RETROGRADE, GREEN);
+    break;
+  case SAS_MODE_RADIALIN:
+    update_status_led(STATUS_LED_SAS_RADIAL_IN, PURPLE);
+    break;
+  case SAS_MODE_RADIALOUT:
+    update_status_led(STATUS_LED_SAS_RADIAL_OUT, PURPLE);
+    break;
+  case SAS_MODE_TARGET:
+    update_status_led(STATUS_LED_SAS_TARGET, PURPLE);
+    break;
+  case SAS_MODE_ANTITARGET:
+    update_status_led(STATUS_LED_SAS_ANTITARGET, PURPLE);
+    break;
+  case SAS_MODE_MANEUVER:
+    update_status_led(STATUS_LED_SAS_MANUVER, BLUE);
+    break;
+  case SAS_MODE_STABILITYASSIST:
+    update_status_led(STATUS_LED_SAS_STABLIZE, WHITE);
+    break;
+  default:
+    break;
   }
 }
 
@@ -791,6 +896,34 @@ void reset_sas_indicators()
   update_status_led(STATUS_LED_SAS_MANUVER, BLACK);
 }
 
+void reset_all_status_leds()
+{
+  for (int i = 0; i < STATUS_LED_ARRAY_COUNT; i++)
+  {
+    STATUS_LED_ARRAY.setPixelColor(i, BLACK);
+    STATUS_LED_STATE[i] = BLACK;
+  }
+}
+
+void reset_segment_displays()
+{
+  for (int i = 0; i < 3; i++)
+  {
+    LED_ALT_0.writeDigitAscii(i, ' ');
+    LED_ALT_1.writeDigitAscii(i, ' ');
+    LED_ALT_2.writeDigitAscii(i, ' ');
+    LED_SPD_0.writeDigitAscii(i, ' ');
+    LED_SPD_1.writeDigitAscii(i, ' ');
+    LED_SPD_2.writeDigitAscii(i, ' ');
+  }
+  LED_ALT_0.writeDisplay();
+  LED_ALT_1.writeDisplay();
+  LED_ALT_2.writeDisplay();
+  LED_SPD_0.writeDisplay();
+  LED_SPD_1.writeDisplay();
+  LED_SPD_2.writeDisplay();
+}
+
 // -- Main Simpit Message Handler
 void Handle_Simpit_Message(byte messageType, byte message[], byte msgSize)
 {
@@ -801,7 +934,14 @@ void Handle_Simpit_Message(byte messageType, byte message[], byte msgSize)
     {
       altitudeMessage myAltitude;
       myAltitude = parseMessage<altitudeMessage>(message);
-      update_altiude(myAltitude.surface);
+      if (CURRENT_ALTITUDE_MODE == 'S')
+      {
+        update_altiude(myAltitude.surface);
+      }
+      else
+      {
+        update_altiude(myAltitude.sealevel);
+      }
     }
     break;
   case VELOCITY_MESSAGE:
@@ -809,7 +949,14 @@ void Handle_Simpit_Message(byte messageType, byte message[], byte msgSize)
     {
       velocityMessage myVelocity;
       myVelocity = parseMessage<velocityMessage>(message);
-      update_velocity(myVelocity.orbital);
+      if (CURRENT_SPEED_MODE == 'S')
+      {
+        update_velocity(myVelocity.surface);
+      }
+      else if (CURRENT_SPEED_MODE == 'O')
+      {
+        update_velocity(myVelocity.orbital);
+      }
     }
     break;
   case APSIDESTIME_MESSAGE:
@@ -851,7 +998,7 @@ void Handle_Simpit_Message(byte messageType, byte message[], byte msgSize)
     {
       resourceMessage myOxi;
       myOxi = parseMessage<resourceMessage>(message);
-      update_led_gauge(myOxi.total, myOxi.available, GAUGE_LED_OXI_INDICES, GAUGE_LED_OXI_INDEX_COUNT, CYAN, BLACK, RED, STATUS_LED_LOW_OXI, YELLOW);
+      update_led_gauge(myOxi.total, myOxi.available, GAUGE_LED_OXI_INDICES, GAUGE_LED_OXI_INDEX_COUNT, BLUE, BLACK, RED, STATUS_LED_LOW_OXI, YELLOW);
     }
     break;
   case OX_STAGE_MESSAGE:
@@ -859,7 +1006,7 @@ void Handle_Simpit_Message(byte messageType, byte message[], byte msgSize)
     {
       resourceMessage myOxi;
       myOxi = parseMessage<resourceMessage>(message);
-      update_led_gauge(myOxi.total, myOxi.available, GAUGE_LED_OXI_INDICES, GAUGE_LED_OXI_INDEX_COUNT, CYAN, BLACK, RED, STATUS_LED_LOW_OXI, YELLOW);
+      update_led_gauge(myOxi.total, myOxi.available, GAUGE_LED_OXI_INDICES, GAUGE_LED_OXI_INDEX_COUNT, BLUE, BLACK, RED, STATUS_LED_LOW_OXI, YELLOW);
     }
     break;
   case SF_MESSAGE:
@@ -899,7 +1046,7 @@ void Handle_Simpit_Message(byte messageType, byte message[], byte msgSize)
     {
       resourceMessage myXenon;
       myXenon = parseMessage<resourceMessage>(message);
-      update_led_gauge(myXenon.total, myXenon.available, GAUGE_LED_XE_INDICES, GAUGE_LED_XE_INDEX_COUNT, PURPLE, BLACK, RED, STATUS_LED_LOW_FUEL, YELLOW);
+      update_led_gauge(myXenon.total, myXenon.available, GAUGE_LED_XE_INDICES, GAUGE_LED_XE_INDEX_COUNT, CYAN, BLACK, RED, STATUS_LED_LOW_FUEL, YELLOW);
     }
     break;
   case XENON_GAS_STAGE_MESSAGE:
@@ -907,7 +1054,7 @@ void Handle_Simpit_Message(byte messageType, byte message[], byte msgSize)
     {
       resourceMessage myXenon;
       myXenon = parseMessage<resourceMessage>(message);
-      update_led_gauge(myXenon.total, myXenon.available, GAUGE_LED_XE_INDICES, GAUGE_LED_XE_INDEX_COUNT, PURPLE, BLACK, RED, STATUS_LED_LOW_FUEL, YELLOW);
+      update_led_gauge(myXenon.total, myXenon.available, GAUGE_LED_XE_INDICES, GAUGE_LED_XE_INDEX_COUNT, CYAN, BLACK, RED, STATUS_LED_LOW_FUEL, YELLOW);
     }
     break;
   case ACTIONSTATUS_MESSAGE:
@@ -981,7 +1128,38 @@ void Handle_Simpit_Message(byte messageType, byte message[], byte msgSize)
       update_status_high_temp(myTempLimit.skinTempLimitPercentage);
     }
     break;
+  case SCENE_CHANGE_MESSAGE:
+    if (message == 0) // flight ready
+    {
+      u8g2.clearBuffer();
+      OLED_NEEDS_RESET = false;
+      reset_all_status_leds();
+      reset_segment_displays();
+      request_resource_refresh();
+    }
+    else // exiting flight scene (going to main menu, space center, etc)
+    {
+      reset_all_status_leds();
+      reset_segment_displays();
+      u8g2.clearBuffer();
+      draw_oled_logo();
+      OLED_NEEDS_RESET = true;
+    }
+    break;
+  case VESSEL_CHANGE_MESSAGE:
+    reset_all_status_leds();
+    reset_segment_displays();
+    u8g2.clearBuffer();
+    draw_oled_logo();
+    OLED_NEEDS_RESET = true;
+    request_resource_refresh();
+    break;
   }
+}
+
+void draw_oled_logo()
+{
+  u8g2.drawXBMP(0, 0, 128, 64, cmdrchkn_transparent_256_bitmap);
 }
 
 // -- Tests
@@ -1041,18 +1219,21 @@ void setup(void)
 
   while (!mySimpit.init())
   {
-    u8g2.clearBuffer();
-    u8g2.sendF("ca", 0xd5, 0xF0);
     if (connection_attempts % 2 == 0)
     {
-      u8g2.drawStr(0, 0, "Waiting for KSP...");
+      u8g2.drawStr(0, 30, "Waiting");
+      u8g2.drawStr(0, 40, "  for");
+      u8g2.drawStr(0, 50, " KSP...");
       update_status_led(STATUS_LED_MASTER_CAUTION, ORANGE);
       update_status_led(STATUS_LED_COMM_SIGNAL, RED);
       CHAR_LCD.print(".");
     }
     else
     {
-      u8g2.drawStr(0, 0, "Waiting for KSP.. ");
+      u8g2.setDrawColor(0);
+      u8g2.drawBox(0, 50, 40, 9);
+      u8g2.setDrawColor(1);
+      u8g2.drawStr(0, 50, " KSP.. ");
       update_status_led(STATUS_LED_MASTER_CAUTION, BLACK);
       update_status_led(STATUS_LED_COMM_SIGNAL, BLACK);
     }
@@ -1088,12 +1269,17 @@ void setup(void)
   mySimpit.registerChannel(SAS_MODE_INFO_MESSAGE);
   mySimpit.registerChannel(TEMP_LIMIT_MESSAGE);
   mySimpit.registerChannel(AIRSPEED_MESSAGE);
+  mySimpit.registerChannel(SCENE_CHANGE_MESSAGE);
+  mySimpit.registerChannel(VESSEL_CHANGE_MESSAGE);
   mySimpit.inboundHandler(Handle_Simpit_Message);
 
-  // GAUGE_LED_ARRAY.fill(BLACK, 0, GAUGE_LED_ARRAY_COUNT);
-  STATUS_LED_ARRAY.fill(BLACK, 0, STATUS_LED_ARRAY_COUNT);
+  reset_all_status_leds();
+  char connected_msg[] = "CKN    SPACE  CONNECTED ";
+  write_chars_to_segment_displays(connected_msg);
   CHAR_LCD.clear();
   u8g2.clearBuffer();
+  draw_oled_logo();
+  OLED_NEEDS_RESET = true;
 }
 
 //------------//
@@ -1102,13 +1288,12 @@ void setup(void)
 void loop(void)
 {
   LOOP_COUNTER++;
+  if (LOOP_COUNTER == 1000)
+  {
+    LOOP_COUNTER = 0;
+    request_resource_refresh();
+  }
 
-  // Reset OLED frame buffer periodically
-  // if (LOOP_COUNTER * LOOP_DELAY_MS / OLED_RESET_MS == 0 || LOOP_COUNTER > 100)
-  // {
-  //   u8g2.clearBuffer();
-  //   LOOP_COUNTER = 0;
-  // }
   // -- Fetch updates
   mySimpit.update();
   check_master_caution();
