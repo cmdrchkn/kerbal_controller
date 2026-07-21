@@ -11,6 +11,7 @@
 #include <U8g2lib.h>
 #include <Wire.h>
 #include "cmdrchkn_transparent_256.h"
+#include <PCF8575.h>
 
 //-----------------//
 // -- Constants -- //
@@ -87,6 +88,9 @@ const int STATUS_LED_MASTER_CAUTION_TRIGGERS[] = {58, 59, 53, 52, 42, 43, 37, 36
 // -- Char LCD
 const char CLEAR_LINE[] = "                    ";
 
+// -- IO Expander
+#define IO_EXPANDER_1_I2C_ADDRESS 0x20
+
 // -- OLED
 // #define OLED_RESET_MS 5000
 
@@ -114,6 +118,15 @@ const char CLEAR_LINE[] = "                    ";
 #define SWITCH_SCREEN_MODE_DOWN_PIN 10
 #define SWITCH_ALT_MODE_PIN 12
 #define SWITCH_SPD_MODE_PIN 14
+#define ACTION_GROUP_1 100
+#define ACTION_GROUP_2 101
+#define ACTION_GROUP_3 102
+#define ACTION_GROUP_4 103
+#define ACTION_GROUP_5 104
+#define ACTION_GROUP_6 105
+#define ACTION_GROUP_7 106
+#define ACTION_GROUP_8 107
+#define PRECISION_MODE_SWITCH 108
 
 //---------------//
 // -- Globals -- //
@@ -153,6 +166,9 @@ Adafruit_AlphaNum4 LED_ALT_2 = Adafruit_AlphaNum4();
 Adafruit_AlphaNum4 LED_SPD_0 = Adafruit_AlphaNum4();
 Adafruit_AlphaNum4 LED_SPD_1 = Adafruit_AlphaNum4();
 Adafruit_AlphaNum4 LED_SPD_2 = Adafruit_AlphaNum4();
+
+// -- IO Expander
+PCF8575 IO_EXPANDER_1(IO_EXPANDER_1_I2C_ADDRESS);
 
 // -- Buttons & Switches
 Adafruit_Debounce SWITCH_STAGE(BUTTON_STAGE_PIN, LOW);
@@ -311,6 +327,17 @@ void prepare_buttons()
   SWITCH_RCS.begin();
   SWITCH_SAS.begin();
   SWITCH_BRAKES.begin();
+
+  // -- IO Expander Buttons
+  IO_EXPANDER_1.pinMode(ACTION_GROUP_1-100, INPUT_PULLUP);
+  IO_EXPANDER_1.pinMode(ACTION_GROUP_2-100, INPUT_PULLUP);
+  IO_EXPANDER_1.pinMode(ACTION_GROUP_3-100, INPUT_PULLUP);
+  IO_EXPANDER_1.pinMode(ACTION_GROUP_4-100, INPUT_PULLUP);
+  IO_EXPANDER_1.pinMode(ACTION_GROUP_5-100, INPUT_PULLUP);
+  IO_EXPANDER_1.pinMode(ACTION_GROUP_6-100, INPUT_PULLUP);
+  IO_EXPANDER_1.pinMode(ACTION_GROUP_7-100, INPUT_PULLUP);
+  IO_EXPANDER_1.pinMode(ACTION_GROUP_8-100, INPUT_PULLUP);
+  IO_EXPANDER_1.pinMode(PRECISION_MODE_SWITCH-100, INPUT_PULLUP);
 }
 
 // -- Helpers
@@ -806,6 +833,44 @@ void check_buttons()
   {
     CURRENT_SPEED_MODE = 'O';
   }
+
+  // -- IO Expander Buttons
+  if (IO_EXPANDER_1.digitalRead(ACTION_GROUP_1-100) == LOW)
+  {
+    mySimpit.toggleCAG(1);
+;  }
+  if (IO_EXPANDER_1.digitalRead(ACTION_GROUP_2-100) == LOW)
+  {
+    mySimpit.toggleCAG(2);
+  }
+  if (IO_EXPANDER_1.digitalRead(ACTION_GROUP_3-100) == LOW)
+  {
+    mySimpit.toggleCAG(3);
+  }
+  if (IO_EXPANDER_1.digitalRead(ACTION_GROUP_4-100) == LOW)
+  {
+    mySimpit.toggleCAG(4);
+  }
+  if (IO_EXPANDER_1.digitalRead(ACTION_GROUP_5-100) == LOW)
+  {
+    mySimpit.toggleCAG(5);
+  }
+  if (IO_EXPANDER_1.digitalRead(ACTION_GROUP_6-100) == LOW)
+  {
+    mySimpit.toggleCAG(6);
+  }
+  if (IO_EXPANDER_1.digitalRead(ACTION_GROUP_7-100) == LOW)
+  {
+    mySimpit.toggleCAG(7);
+  }
+  if (IO_EXPANDER_1.digitalRead(ACTION_GROUP_8-100) == LOW)
+  {
+    mySimpit.toggleCAG(8);
+  }
+  // if (IO_EXPANDER_1.digitalRead(PRECISION_MODE_SWITCH-100) == LOW)
+  // {
+  //   mySimpit.activateAction(PRECISION_MODE_ACTION);
+  // }
 }
 
 void zero_led_gauges()
@@ -1195,6 +1260,9 @@ void setup(void)
 
   // -- Lockout Switch Setup
   pinMode(LOCKOUT_SWITCH_PIN, INPUT_PULLUP);
+
+  // -- IO Expander Setup
+  IO_EXPANDER_1.begin();
 
   // -- Button Setup
   prepare_buttons();

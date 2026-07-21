@@ -25,13 +25,13 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="3.1008966"
-     inkscape:cx="365.37819"
-     inkscape:cy="228.4823"
+     inkscape:cx="206.87565"
+     inkscape:cy="201.07088"
      inkscape:document-units="mm"
      inkscape:current-layer="layer2"
      showgrid="false"
-     inkscape:window-width="3360"
-     inkscape:window-height="1372"
+     inkscape:window-width="1760"
+     inkscape:window-height="1416"
      inkscape:window-x="0"
      inkscape:window-y="0"
      inkscape:window-maximized="1"
@@ -244,7 +244,7 @@
        inkscape:label="Border"
        id="rect536" />
     <rect
-       style="display:none;fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:0.264583"
+       style="display:inline;fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:0.264583"
        id="rect117"
        width="80.004524"
        height="59.914654"
@@ -253,7 +253,7 @@
        transform="translate(-15.1243,-18.7325)" />
   </g>
   <rect
-     style="display:none;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.322632"
+     style="display:inline;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.322632"
      id="rect118"
      width="29.872194"
      height="20.444811"
@@ -301,7 +301,7 @@
     <g
        inkscape:label="SubMinorXGridlines"
        id="g113"
-       style="display:inline">
+       style="display:none">
       <path
          style="fill:none;stroke:#000000;stroke-width:0.079375"
          d="M 10,0 V 60"
@@ -326,7 +326,7 @@
     <g
        inkscape:label="SubMinorYGridlines"
        id="g116"
-       style="display:inline">
+       style="display:none">
       <path
          style="fill:none;stroke:#000000;stroke-width:0.079375"
          d="M 0,10 H 80"
@@ -875,55 +875,60 @@
   <g
      inkscape:groupmode="layer"
      id="layer2"
-     inkscape:label="LED Index">
+     inkscape:label="LED Index"
+     style="display:inline">
     <text
        xml:space="preserve"
-       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.09381px;font-family:'Fira Code';-inkscape-font-specification:'Fira Code';letter-spacing:-0.579328px;writing-mode:lr-tb;direction:ltr;fill:#ff5555;fill-opacity:1;stroke:none;stroke-width:0.295575"
-       x="17.888447"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.09381px;font-family:'Fira Code';-inkscape-font-specification:'Fira Code';letter-spacing:-0.579328px;writing-mode:lr-tb;direction:ltr;display:inline;fill:#ff5555;fill-opacity:1;stroke:none;stroke-width:0.295575"
+       x="19.036245"
        y="24.316395"
        id="text118"
-       transform="scale(0.89205433,1.121008)"><tspan
+       transform="scale(0.8920543,1.121008)"><tspan
          sodipodi:role="line"
          style="font-size:7.09381px;letter-spacing:-0.579328px;fill:#ff5555;stroke-width:0.295575"
-         x="17.888447"
+         x="19.036245"
          y="24.316395"
-         id="tspan124"
-         dy="0">63	55	47	39	31	23	15	7</tspan><tspan
+         id="tspan136">56	55	40	39	24	23	8	 7</tspan><tspan
          sodipodi:role="line"
          style="font-size:7.09381px;letter-spacing:-0.579328px;fill:#ff5555;stroke-width:0.295575"
-         x="17.888447"
+         x="19.036245"
          y="33.183659"
-         id="tspan130">62	54	46	38	30	22	14	6</tspan><tspan
+         id="tspan143">57	54	41	38	25	22	9	 6</tspan><tspan
          sodipodi:role="line"
          style="font-size:7.09381px;letter-spacing:-0.579328px;fill:#ff5555;stroke-width:0.295575"
-         x="17.888447"
+         x="19.036245"
          y="42.050919"
-         id="tspan131">61	53	45	37	29	21	13	5</tspan><tspan
+         id="tspan144">58	53	42	37	26	21	10	5</tspan><tspan
          sodipodi:role="line"
          style="font-size:7.09381px;letter-spacing:-0.579328px;fill:#ff5555;stroke-width:0.295575"
-         x="17.888447"
+         x="19.036245"
          y="50.918182"
-         id="tspan132">60	52	44	36	28	20	12	4</tspan><tspan
+         id="tspan145">59	52	43	36	27	20	11	4</tspan><tspan
          sodipodi:role="line"
          style="font-size:7.09381px;letter-spacing:-0.579328px;fill:#ff5555;stroke-width:0.295575"
-         x="17.888447"
+         x="19.036245"
          y="59.785446"
-         id="tspan133">59	51	43	35	27	19	11	3</tspan><tspan
+         id="tspan146">60	51	44	35	28	19	12	3</tspan><tspan
          sodipodi:role="line"
          style="font-size:7.09381px;letter-spacing:-0.579328px;fill:#ff5555;stroke-width:0.295575"
-         x="17.888447"
+         x="19.036245"
          y="68.65271"
-         id="tspan134">58	50	42	34	26	18	10	2</tspan><tspan
+         id="tspan147">61	50	45	34	29	18	13	2</tspan><tspan
          sodipodi:role="line"
          style="font-size:7.09381px;letter-spacing:-0.579328px;fill:#ff5555;stroke-width:0.295575"
-         x="17.888447"
+         x="19.036245"
          y="77.519974"
-         id="tspan135">57	49	41	33	25	17	9	 1</tspan><tspan
+         id="tspan148">62	49	46	33	30	17	14	1</tspan><tspan
          sodipodi:role="line"
          style="font-size:7.09381px;letter-spacing:-0.579328px;fill:#ff5555;stroke-width:0.295575"
-         x="17.888447"
+         x="19.036245"
          y="86.38723"
-         id="tspan136">56	48	40	32	24	16	8	 0</tspan></text>
+         id="tspan149">63	48	47	32	31	16	15	0</tspan><tspan
+         sodipodi:role="line"
+         style="font-size:7.09381px;letter-spacing:-0.579328px;fill:#ff5555;stroke-width:0.295575"
+         x="19.036245"
+         y="95.254494"
+         id="tspan150" /></text>
   </g>
   <style
      id="style4549"
